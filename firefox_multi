@@ -26,15 +26,20 @@ FIREFOX_PATH = '/contrib/bin/' + FIREFOX_BASENAME
 PROFILE_DIR = os.path.expanduser('~') + '/.mozilla/firefox'
 PROFILE_INI = PROFILE_DIR + '/profiles.ini'
 
-# TODO: Getting the IP this way may be fragile as per the official python docs.
-LOCAL_IP = socket.gethostbyname(socket.gethostname())
+# Options for firefox process checks on remote hosts.
+SSH_CONNECT_TIMEOUT = 2 # In seconds.
+SSH_OPT = '"ConnectTimeout ' + str(SSH_CONNECT_TIMEOUT) + '"'
 
 # The lock is a symlink pointing to the active machine ip & pid.
 # Ex: 10.116.72.90:+30681
 LOCK_SYMLINK_REGEX = '([0-9.]+):\+([0-9])$';
 
+# Strings returned from the script in SSH mode to determine process status.
 SSH_FF_RUNNING = 'firefox via_ssh: running'
 SSH_FF_STOPPED = 'firefox via_ssh: stopped'
+
+# TODO: Getting the IP this way may be fragile as per the official python docs.
+LOCAL_IP = socket.gethostbyname(socket.gethostname())
 
 # Finds profiles that are synced (contain 'sync' in their name) and returns them
 # as an array of {'name', 'abs_path'} dicts.
@@ -140,9 +145,9 @@ def firefox_is_running(prof, via_ssh=False):
             return True
 
         # SSH into the remote host.
-        # TODO: Add timeout so this does not go on forever.
-        proc = subprocess.Popen(['ssh', prof['ip'], PROGRAM_PATH, 'via_ssh',
-                pickle.dumps(prof)], bufsize=-1, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(['ssh', '-o', SSH_OPT, prof['ip'],
+                PROGRAM_PATH, 'via_ssh', pickle.dumps(prof)], bufsize=-1,
+                stdout=subprocess.PIPE)
         # stderr prints to stderr by default.
         stdout, stderr = ssh_proc.communicate() # Blocks until process ends.
         if SSH_FF_STOPPED in stdout: return False
