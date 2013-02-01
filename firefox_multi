@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# TODO: Check .parentlock? How does that affect the lock system?
 
 # This script will search the current users ~/.mozilla/firefox/profiles.ini for
 # profiles with "sync" in the name (case sensitive) and attempt to open one of
@@ -22,7 +23,7 @@ FIREFOX_PATH = '/contrib/bin/' + FIREFOX_BASENAME
 PROFILE_DIR = os.path.expanduser('~') + '/.mozilla/firefox'
 PROFILE_INI = PROFILE_DIR + '/profiles.ini'
 
-# TODO: Getting the IP this way may be fragile.
+# TODO: Getting the IP this way may be fragile as per the official python docs.
 LOCAL_IP = socket.gethostbyname(socket.gethostname())
 
 # The lock is a symlink pointing to the active machine ip & pid.
@@ -59,13 +60,10 @@ def find_synced_profiles(filepath):
 
 # Finds profiles which are not currently being used from the given array of
 # {'name', 'abs_path'} dicts. Returns these inactive profile dicts in an array.
-def find_inactive_profiles(searchable_profiles):
-# TODO: searchable_profiles name.
-# TODO: Delete/test .parentlock? Checking for the existence of lock may also not
-# be good enough.
+def find_inactive_profiles(synced_profiles):
     inactive_profiles = [] # [ {'name', 'abs_path'} ]
     active_profiles = [] # [ {'name', 'abs_path', 'ip', 'pid'} ]
-    for prof in searchable_profiles:
+    for prof in synced_profiles:
         prof_ip, prof_pid = get_lock_proc_info(prof)
         if prof_ip is None: # When there is no ip (i.e. an inactive profile).
             inactive_profiles.append(prof)
