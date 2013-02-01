@@ -125,7 +125,7 @@ def attempt_to_recover_profile(prof):
 # profile of {'name', 'abs_path', 'ip', 'pid'} and a boolean, via_ssh, True if
 # this function is called in SSH mode.
 def firefox_is_running(prof, via_ssh=False):
-    if prof['ip'] is LOCAL_IP: # Firefox is running on localhost.
+    if prof['ip'] == LOCAL_IP: # Firefox is running on localhost.
         try:
             with open('/proc/' + prof['pid'] + '/cmdline', 'r') as f:
                 cmdline = f.read()
