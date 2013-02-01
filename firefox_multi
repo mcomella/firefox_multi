@@ -10,8 +10,11 @@
 
 # This script will also attempt to recover crashed profiles by looking at the
 # $PROFILE_DIR/lock symlink and the address it points to. If the firefox process
-# is not running on this address, the lock file is removed, and the profile is
-# recovered.
+# is not running at this address, the lock file is removed, and the profile is
+# recovered. If the address is remote, the remote machine will be SSHed into.
+
+# Any arguments with be passed to the spawned firefox instance through the
+# typical firefox start script.
 
 from os import execl, readlink
 import ConfigParser, os.path, pickle, re, socket, subprocess, sys
@@ -162,17 +165,13 @@ def remove_lock(prof):
 # where cmd_path = the executable path of this script
 #       via_ssh = the string literal, 'via_ssh'
 #       prof = a serialized profile of {`name`, `abs_path`, `ip`, `pid`}
-if len(sys.argv) == 3 and sys.argv[1] is 'via_ssh':
+if len(sys.argv) > 1 and sys.argv[1] is 'via_ssh':
+    if len(sys.argv) is not 3:
+        sys.exit('SSH mode: Expected cmd_path via_ssh prof.')
     prof = pickle.loads(sys.argv[2])
     if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
     else: print SSH_FF_STOPPED
     sys.exit()
-
-# Handle invalid arguments - arguments besides the above SSH mode are incorrect.
-# A catch all to remind the user that this is not the original firefox init
-# script and that the SSH process is not sent the wrong args.
-if len(sys.argv) >= 2:
-    sys.exit('Invalid input: Firefox wrapper does not except args.')
 
 # User-started mode: Finds an inactive profile and launches it.
 synced_profiles = find_synced_profiles(PROFILE_INI)
@@ -185,7 +184,7 @@ if len(inactive_profiles) is 0:
 # Spawns firefox in a new shell process as libxpcom.so is looked for in the
 # wrong directory (/usr/bin/libxpcom.so) with a straight exec call.
 first_inactive_profile = inactive_profiles[0]['name']
-print('Opening profile "' + first_inactive_profile + '" if no other profiles '
-        'are open in the current session.')
 firefox_cmd = FIREFOX_PATH + ' -P ' + first_inactive_profile
+for arg in sys.argv[1:]: firefox_cmd = firefox_cmd + ' ' + arg
+print 'bash -c "' + firefox_cmd + '"'
 execl(SHELL_PATH, 'bash', '-c', firefox_cmd)
