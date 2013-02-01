@@ -148,16 +148,16 @@ def remove_lock(prof):
         # The lock is already gone so the profile is (presumably) safe to use.
         pass
 
-# TODO: doc.
+# TODO: doc. Write args. Note that it's undocumnted.
 # sshed from a different machine.
-if len(sys.argv) >= 2 and sys.argv[1] is 'via_ssh':
+if len(sys.argv) == 3 and sys.argv[1] is 'via_ssh':
     prof = pickle.loads(sys.argv[2])
     if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
     else: print SSH_FF_STOPPED
     sys.exit()
 
-# TODO: Usage.
-if len(sys.argv) == 1:
+# TODO: Print usage.
+if len(sys.argv) >= 2:
     sys.exit('Invalid number of arguments.')
 
 # TODO: doc.
