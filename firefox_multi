@@ -84,7 +84,7 @@ def find_inactive_profiles(searchable_profiles):
 # (prof_ip, prof_pid). Returns (None, None) if the lock DNE or the lock's
 # symlink format is not recognized. Additionally prints an error message in the
 # latter case as this should not happen under normal usage. Input is a profile:
-# {'name', 'abs_path'}.
+# {'abs_path'}.
 def get_lock_proc_info(prof):
     try:
         info_str = os.readlink(prof['abs_path'] + '/lock')
@@ -124,7 +124,6 @@ def firefox_is_running(prof, via_ssh=False):
 
     else: # Firefox is running on a remote host.
         if via_ssh:
-            # TODO: Make sure this output goes to the original process.
             sys.stderr.write('firefox_is_running(): SSH has accessed the wrong '
                     'machine (expected: ' + prof['ip'] + '; actual: ' +
                     LOCAL_IP + '). This should not happen.')
@@ -134,12 +133,14 @@ def firefox_is_running(prof, via_ssh=False):
             return True
 
         # SSH into the remote host.
-        out = subprocess.check_output(['ssh', prof['ip'], PROGRAM_PATH,
-                'via_ssh', pickle.dumps(prof)])
-        # TODO: Get stdout/stderr and parse.
-        return False
+        # TODO: Add timeout so this does not go on forever.
+        proc = subprocess.Popen(['ssh', prof['ip'], PROGRAM_PATH, 'via_ssh',
+                pickle.dumps(prof)], bufsize=-1, stdout=subprocess.PIPE,)
+        stdout, stderr = ssh_proc.communicate() # Blocks until process ends.
+        if SSH_FF_STOPPED in stdout: return False
+        return True
 
-# TODO: doc.
+# Removes the lock from the given profile. Input is a profile: {'abs_path'}.
 def remove_lock(prof):
     prof_lock_path = prof['abs_path'] + '/lock'
     try:
