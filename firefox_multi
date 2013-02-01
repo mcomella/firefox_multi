@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# TODO: Check .parentlock? How does that affect the lock system?
 
 # This script will search the current users ~/.mozilla/firefox/profiles.ini for
 # profiles with "sync" in the name (case sensitive) and attempt to open one of
@@ -10,11 +9,13 @@
 
 # This script will also attempt to recover crashed profiles by looking at the
 # $PROFILE_DIR/lock symlink and the address it points to. If the firefox process
-# is not running at this address, the lock file is removed, and the profile is
-# recovered. If the address is remote, the remote machine will be SSHed into.
+# is not running at the designated address, the lock file is removed, and the
+# profile is recovered. If the address is remote, the remote machine will use
+# SSH to accomplish this. The script will run in SSH mode if the first argument
+# is "via_ssh". This should NOT be specified by the user.
 
-# Any arguments with be passed to the spawned firefox instance through the
-# typical firefox start script.
+# Any arguments (discluding SSH mode) will be passed to the spawned firefox
+# instance through the typical firefox start script.
 
 from os import execl, readlink
 import ConfigParser, os.path, pickle, re, socket, subprocess, sys
@@ -28,11 +29,11 @@ PROFILE_INI = PROFILE_DIR + '/profiles.ini'
 
 # Options for firefox process checks on remote hosts.
 SSH_CONNECT_TIMEOUT = 2 # In seconds.
-SSH_OPT = '"ConnectTimeout ' + str(SSH_CONNECT_TIMEOUT) + '"'
+SSH_OPT = 'ConnectTimeout=' + str(SSH_CONNECT_TIMEOUT)
 
 # The lock is a symlink pointing to the active machine ip & pid.
 # Ex: 10.116.72.90:+30681
-LOCK_SYMLINK_REGEX = '([0-9.]+):\+([0-9]+$)';
+LOCK_SYMLINK_REGEX = '([0-9.]+):\+([0-9]+$)'
 
 # Strings returned from the script in SSH mode to determine process status.
 SSH_FF_RUNNING = 'firefox via_ssh: running'
@@ -90,9 +91,9 @@ def find_inactive_profiles(synced_profiles):
 
 # Returns a tuple with the active profile's machine ip and Firefox's pid
 # (prof_ip, prof_pid). Returns (None, None) if the lock DNE or the lock's
-# symlink format is not recognized. Additionally prints an error message in the
-# latter case as this should not happen under normal usage. Input is a profile:
-# {'abs_path'}.
+# symlink format is not recognized. Additionally prints an error message and
+# exits in the latter case as this should not happen under normal usage. Input
+# is a profile: {'abs_path'}.
 def get_lock_proc_info(prof):
     try:
         info_str = os.readlink(prof['abs_path'] + '/lock')
@@ -102,12 +103,11 @@ def get_lock_proc_info(prof):
     else:
         m = re.match(LOCK_SYMLINK_REGEX, info_str)
         if m is None:
-            sys.stderr.write('get_lock_prof_info(): The link on profile "' +
+            sys.exit('get_lock_prof_info(): The link on profile "' +
                     prof['name'] + '" does not have a recognizable format. '
                     'This could be a problem with the script regex, or the '
                     'lock file may have been manipulated incorrectly. Please '
-                    'manually review these items.')
-            return (None, None)
+                    'manually review these items. Exiting...')
         return (m.group(1), m.group(2)) # ip, pid
 
 # Attempts to recover a profile by checking if a Firefox process exists at the
@@ -122,7 +122,7 @@ def attempt_to_recover_profile(prof):
 # Returns True if the firefox process is running from the given profile. Returns
 # False otherwise. If the process is located on another machine, it will SSH to
 # return the appropriate result; assumes True if there is an error. Input is a
-# profile of {'name', 'abs_path', 'ip', 'pid'} and a boolean, via_ssh, True if
+# profile of {'name', 'abs_path', 'ip', 'pid'} and a boolean, via_ssh, True, if
 # this function is called in SSH mode.
 def firefox_is_running(prof, via_ssh=False):
     if prof['ip'] == LOCAL_IP: # Firefox is running on localhost.
@@ -145,9 +145,9 @@ def firefox_is_running(prof, via_ssh=False):
             return True
 
         # SSH into the remote host.
-        proc = subprocess.Popen(['ssh', '-o', SSH_OPT, prof['ip'],
-                PROGRAM_PATH, 'via_ssh', pickle.dumps(prof)], bufsize=-1,
-                stdout=subprocess.PIPE)
+        proc = subprocess.Popen(['/usr/bin/ssh', '-o', SSH_OPT, prof['ip'],
+                PROGRAM_PATH, 'via_ssh', '"' + pickle.dumps(prof) + '"'],
+                bufsize=-1, stdout=subprocess.PIPE)
         # stderr prints to stderr by default.
         stdout, stderr = proc.communicate() # Blocks until process ends.
         if SSH_FF_STOPPED in stdout: return False
@@ -170,12 +170,18 @@ def remove_lock(prof):
 # where cmd_path = the executable path of this script
 #       via_ssh = the string literal, 'via_ssh'
 #       prof = a serialized profile of {`name`, `abs_path`, `ip`, `pid`}
-if len(sys.argv) > 1 and sys.argv[1] is 'via_ssh':
+if len(sys.argv) > 1 and sys.argv[1] == 'via_ssh':
     if len(sys.argv) is not 3:
         sys.exit('SSH mode: Expected cmd_path via_ssh prof.')
-    prof = pickle.loads(sys.argv[2])
-    if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
-    else: print SSH_FF_STOPPED
+    try:
+        prof = pickle.loads(sys.argv[2])
+    except (pickle.UnpicklingError, IndexError) as e:
+        print 'Error: ' + str(e)
+        # Assume running so the lock file is not deleted.
+        print SSH_FF_RUNNING
+    else:
+        if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
+        else: print SSH_FF_STOPPED
     sys.exit()
 
 # User-started mode: Finds an inactive profile and launches it.
