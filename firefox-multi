@@ -11,14 +11,13 @@
 # than the user expects to have open at a time.
 
 from os import execl, listdir, readlink
-from os.path import expanduser
-import ConfigParser, pickle, re, socket, string, subprocess, sys
+import ConfigParser, os.path, pickle, re, socket, string, subprocess, sys
 
 PROGRAM_PATH = os.path.abspath(sys.argv[0])
 SHELL_PATH = '/bin/bash'
 FIREFOX_BASENAME = 'firefox'
 FIREFOX_PATH = '/contrib/bin/' + FIREFOX_BASENAME
-PROFILE_DIR = expanduser('~') + '/.mozilla/firefox'
+PROFILE_DIR = os.path.expanduser('~') + '/.mozilla/firefox'
 PROFILE_INI = PROFILE_DIR + '/profiles.ini'
 
 # TODO: Getting the IP this way may be fragile.
