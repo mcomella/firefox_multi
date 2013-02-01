@@ -149,7 +149,7 @@ def firefox_is_running(prof, via_ssh=False):
                 PROGRAM_PATH, 'via_ssh', pickle.dumps(prof)], bufsize=-1,
                 stdout=subprocess.PIPE)
         # stderr prints to stderr by default.
-        stdout, stderr = ssh_proc.communicate() # Blocks until process ends.
+        stdout, stderr = proc.communicate() # Blocks until process ends.
         if SSH_FF_STOPPED in stdout: return False
         return True
 
