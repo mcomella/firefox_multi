@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+# TODO: Convert print to printf style.
+# TODO: Try/except/else/finally - make sure we can't use that.
+# TODO: Escape newlines for multiline strings?
+
+# This script will search the current users ~/.mozilla/firefox/profiles.ini for
+# profiles with "sync" in the name (case sensitive) and attempt to open one of
+# them on the current screen. If a profile is already open on the current
+# screen, a new window from that profile will open on the current screen. Due to
+# this last quirk, it is recommended to have at least one more profile available
+# than the user expects to have open at a time.
+
+from os import execl, listdir, readlink
+from os.path import expanduser
+import ConfigParser, pickle, re, socket, string, subprocess, sys
+
+PROGRAM_PATH = os.path.abspath(sys.argv[0])
+SHELL_PATH = '/bin/bash'
+FIREFOX_BASENAME = 'firefox'
+FIREFOX_PATH = '/contrib/bin/' + FIREFOX_BASENAME
+PROFILE_DIR = expanduser('~') + '/.mozilla/firefox'
+PROFILE_INI = PROFILE_DIR + '/profiles.ini'
+
+# TODO: Getting the IP this way may be fragile.
+LOCAL_IP = socket.gethostbyname(socket.gethostname())
+
+# The lock is a symlink pointing to the active machine ip & pid.
+# Ex: 10.116.72.90:+30681
+LOCK_SYMLINK_REGEX = '([0-9.]+):\+([0-9])$';
+
+SSH_FF_RUNNING = 'firefox via_ssh: running'
+SSH_FF_STOPPED = 'firefox via_ssh: stopped'
+
+# Finds profiles that are synced (contain 'sync' in their name) and returns them
+# as an array of {'name', 'abs_path'} dicts.
+def find_synced_profiles(filepath):
+    config = ConfigParser.RawConfigParser()
+    config.read(filepath)
+
+    # Iterate over profiles. If filepath DNE, config.sections will have a len of
+    # zero, and the empty array will be returned.
+    synced_profiles = []
+    for section in config.sections():
+        if 'Profile' in section:
+            name = config.get(section, 'Name')
+            if 'sync' in name:
+                path = config.get(section, 'Path')
+                relative = config.getboolean(section, 'IsRelative')
+                if relative:
+                    path = PROFILE_DIR + '/' + path
+
+                prof = {
+                    'name': name,
+                    'abs_path': path
+                }
+                synced_profiles.append(prof)
+    return synced_profiles
+
+# Finds profiles which are not currently being used from the given array of
+# {'name', 'abs_path'} dicts. Returns these inactive profile dicts in an array.
+def find_inactive_profiles(searchable_profiles):
+# TODO: searchable_profiles name.
+# TODO: Delete/test .parentlock? Checking for the existence of lock may also not
+# be good enough.
+    inactive_profiles = [] # [ {'name', 'abs_path'} ]
+    active_profiles = [] # [ {'name', 'abs_path', 'ip', 'pid'} ]
+    for prof in searchable_profiles:
+        prof_ip, prof_pid = get_lock_proc_info(prof)
+        if prof_ip is None: # When there is no ip (i.e. an inactive profile).
+            inactive_profiles.append(prof)
+        else:
+            prof['ip'], prof['pid'] = prof_ip, prof_pid
+            active_profiles.append(prof)
+
+    if len(inactive_profiles) is 0:
+        print 'Attempting to recover crashed profiles...'
+        for prof in active_profiles:
+            unlocked = attempt_to_recover_profile(prof)
+            if unlocked is True:
+                inactive_profiles.append(prof)
+                break # Only recover one for time constraints.
+    return inactive_profiles
+
+# Returns a tuple with the active profile's machine ip and Firefox's pid
+# (prof_ip, prof_pid). Returns None if the lock DNE or the lock's symlink format
+# is not recognized. Additionally prints an error message in the latter case as
+# this should not happen under normal usage.
+def get_lock_proc_info(prof):
+    try:
+        info_str = os.readlink(prof['abs_path'] + '/lock')
+        m = re.match(LOCK_SYMLINK_REGEX, info_str)
+        if m is None:
+            # TODO: Wording.
+            sys.stderr.write('get_lock_prof_info(): The link on profile "' +
+                    prof['name'] + '" does not have a recognizable format. '
+                    'This could be a problem with the script regex, or the '
+                    'lock file may have been manipulated incorrectly. Please '
+                    'review these items.')
+            return None
+        return (m.group(1), m.group(2)) # ip, pid
+    except OSError:
+        # Thrown on os.readlink() if the given path is not a link (i.e. DNE).
+        return None
+
+# Attempts to recover a profile by checking if a Firefox process exists at the
+# specified machine and pid, and if not, deleting the lock file and returning
+# True. Returns False otherwise. Input is an active profile: {'name',
+# 'abs_path', 'ip', 'pid'}.
+def attempt_to_recover_profile(prof):
+    if firefox_is_running(prof): return False
+    remove_lock(prof)
+    return True
+
+# TODO: doc. Mention via_ssh for precaution
+def firefox_is_running(prof, via_ssh=False):
+    if prof['ip'] is LOCAL_IP: # Firefox is running on localhost.
+        try:
+            with open('/proc/' + proc_id + '/cmdline', 'r') as f:
+                cmdline = f.read()
+                if FIREFOX_BASENAME in cmdline: return True # Still active.
+        except IOError: # File DNE.
+            pass
+        return False
+
+    else: # Firefox is running on a remote host.
+        if via_ssh:
+            # TODO: Make sure this output goes to the original process.
+            sys.stderr.write('firefox_is_running(): SSH has accessed the wrong '
+                    'machine (expected: ' + prof['ip'] + '; actual: ' +
+                    LOCAL_IP + '). This should not happen.')
+            # Firefox may not be running, but we're not on the correct machine
+            # so we can't tell the difference. Assume that it's running so the
+            # lock file is not deleted.
+            return True
+
+        # SSH into the remote host.
+        out = subprocess.check_output(['ssh', prof['ip'], PROGRAM_PATH,
+                'via_ssh', pickle.dumps(prof)])
+        # TODO: Get stdout/stderr and parse.
+        return False
+
+# TODO: doc.
+def remove_lock(prof):
+    try:
+        prof_lock_path = prof['abs_path'] + '/lock'
+        os.unlink(prof_lock_path)
+        print 'Unlinked ' + prof_lock_path + '.'
+    except OSError: # File DNE.
+        # The lock is already gone so the profile is (presumably) safe to use.
+        pass
+
+# TODO: doc.
+# sshed from a different machine.
+if len(sys.argv) >= 2 and sys.argv[1] is 'via_ssh':
+    prof = pickle.loads(sys.argv[2])
+    if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
+    else: print SSH_FF_STOPPED
+    sys.exit()
+
+# TODO: doc.
+# Not sshed; initial run.
+synced_profiles = find_synced_profiles(PROFILE_INI)
+inactive_profiles = find_inactive_profiles(synced_profiles)
+if len(inactive_profiles) is 0:
+    sys.exit('All profiles are currently active. If a new window did not open '
+            'on the current display, please close a profile, delete the lock '
+            'file, or create a new profile with "sync" in the name.')
+
+# Spawns firefox in a new shell process as libxpcom.so is looked for in the
+# wrong directory (/usr/bin/libxpcom.so) with a straight exec call.
+first_inactive_profile = inactive_profiles[0]['name']
+print('Opening profile "' + first_inactive_profile + '" if no other profiles '
+        'are open in the current session.')
+firefox_cmd = FIREFOX_PATH + ' -P ' + first_inactive_profile
+execl(SHELL_PATH, 'bash', '-c', firefox_cmd)
