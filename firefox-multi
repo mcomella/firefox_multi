@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # TODO: Convert print to printf style.
-# TODO: Try/except/else/finally - make sure we can't use that.
 # TODO: Escape newlines for multiline strings?
 
 # This script will search the current users ~/.mozilla/firefox/profiles.ini for
@@ -89,6 +88,10 @@ def find_inactive_profiles(searchable_profiles):
 def get_lock_proc_info(prof):
     try:
         info_str = os.readlink(prof['abs_path'] + '/lock')
+    except OSError:
+        # Thrown on os.readlink() if the given path is not a link (i.e. DNE).
+        return (None, None)
+    else:
         m = re.match(LOCK_SYMLINK_REGEX, info_str)
         if m is None:
             sys.stderr.write('get_lock_prof_info(): The link on profile "' +
@@ -98,9 +101,6 @@ def get_lock_proc_info(prof):
                     'manually review these items.')
             return (None, None)
         return (m.group(1), m.group(2)) # ip, pid
-    except OSError:
-        # Thrown on os.readlink() if the given path is not a link (i.e. DNE).
-        return (None, None)
 
 # Attempts to recover a profile by checking if a Firefox process exists at the
 # specified machine and pid, and if not, deletes the lock file and returns True.
@@ -141,13 +141,14 @@ def firefox_is_running(prof, via_ssh=False):
 
 # TODO: doc.
 def remove_lock(prof):
+    prof_lock_path = prof['abs_path'] + '/lock'
     try:
-        prof_lock_path = prof['abs_path'] + '/lock'
         os.unlink(prof_lock_path)
-        print 'Unlinked ' + prof_lock_path + '.'
     except OSError: # File DNE.
         # The lock is already gone so the profile is (presumably) safe to use.
         pass
+    else:
+        print 'Unlinked ' + prof_lock_path + '.'
 
 # TODO: doc. Write args. Note that it's undocumnted.
 # sshed from a different machine.
