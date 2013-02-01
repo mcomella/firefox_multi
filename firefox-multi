@@ -9,6 +9,7 @@
 # screen, a new window from that profile will open on the current screen. Due to
 # this last quirk, it is recommended to have at least one more profile available
 # than the user expects to have open at a time.
+# TODO: Elaborate on this.
 
 from os import execl, listdir, readlink
 import ConfigParser, os.path, pickle, re, socket, string, subprocess, sys
@@ -81,20 +82,20 @@ def find_inactive_profiles(searchable_profiles):
     return inactive_profiles
 
 # Returns a tuple with the active profile's machine ip and Firefox's pid
-# (prof_ip, prof_pid). Returns None if the lock DNE or the lock's symlink format
-# is not recognized. Additionally prints an error message in the latter case as
-# this should not happen under normal usage.
+# (prof_ip, prof_pid). Returns (None, None) if the lock DNE or the lock's
+# symlink format is not recognized. Additionally prints an error message in the
+# latter case as this should not happen under normal usage. Input is a profile:
+# {'name', 'abs_path'}.
 def get_lock_proc_info(prof):
     try:
         info_str = os.readlink(prof['abs_path'] + '/lock')
         m = re.match(LOCK_SYMLINK_REGEX, info_str)
         if m is None:
-            # TODO: Wording.
             sys.stderr.write('get_lock_prof_info(): The link on profile "' +
                     prof['name'] + '" does not have a recognizable format. '
                     'This could be a problem with the script regex, or the '
                     'lock file may have been manipulated incorrectly. Please '
-                    'review these items.')
+                    'manually review these items.')
             return (None, None)
         return (m.group(1), m.group(2)) # ip, pid
     except OSError:
@@ -102,9 +103,9 @@ def get_lock_proc_info(prof):
         return (None, None)
 
 # Attempts to recover a profile by checking if a Firefox process exists at the
-# specified machine and pid, and if not, deleting the lock file and returning
-# True. Returns False otherwise. Input is an active profile: {'name',
-# 'abs_path', 'ip', 'pid'}.
+# specified machine and pid, and if not, deletes the lock file and returns True.
+# Returns False otherwise. Input is an active profile: {'name', 'abs_path',
+# 'ip', 'pid'}.
 def attempt_to_recover_profile(prof):
     if firefox_is_running(prof): return False
     remove_lock(prof)
@@ -117,7 +118,7 @@ def firefox_is_running(prof, via_ssh=False):
             with open('/proc/' + proc_id + '/cmdline', 'r') as f:
                 cmdline = f.read()
                 if FIREFOX_BASENAME in cmdline: return True # Still active.
-        except IOError: # File DNE.
+        except IOError: # File DNE: process is dead.
             pass
         return False
 
