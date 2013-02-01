@@ -95,11 +95,11 @@ def get_lock_proc_info(prof):
                     'This could be a problem with the script regex, or the '
                     'lock file may have been manipulated incorrectly. Please '
                     'review these items.')
-            return None
+            return (None, None)
         return (m.group(1), m.group(2)) # ip, pid
     except OSError:
         # Thrown on os.readlink() if the given path is not a link (i.e. DNE).
-        return None
+        return (None, None)
 
 # Attempts to recover a profile by checking if a Firefox process exists at the
 # specified machine and pid, and if not, deleting the lock file and returning
