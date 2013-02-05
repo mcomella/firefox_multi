@@ -196,6 +196,6 @@ if len(inactive_profiles) is 0:
 # wrong directory (/usr/bin/libxpcom.so) with a straight exec call.
 first_inactive_profile = inactive_profiles[0]['name']
 firefox_cmd = FIREFOX_PATH + ' -P ' + first_inactive_profile
-for arg in sys.argv[1:]: firefox_cmd = firefox_cmd + ' ' + arg
+for arg in sys.argv[1:]: firefox_cmd = firefox_cmd + ' \'' + arg + '\''
 print 'bash -c "' + firefox_cmd + '"'
 execl(SHELL_PATH, 'bash', '-c', firefox_cmd)
