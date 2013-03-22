@@ -5,4 +5,3 @@ TODO:
   * Readability
   * Coding conventions, lol.
   * Describe what this actually is.
-  * Add a license.
