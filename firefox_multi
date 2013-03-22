@@ -1,23 +1,25 @@
 #!/usr/bin/env python
 
-# This script will search the current users ~/.mozilla/firefox/profiles.ini for
-# profiles with "sync" in the name (case sensitive) and attempt to open one that
-# is not currently open on the current screen. If a profile is already open on
-# the current screen, a new window from that profile will open instead. Due to
-# this last quirk, it is recommended to have at least one more profile available
-# than the user expects to have open at any time.
+"""
+This script will search the current users ~/.mozilla/firefox/profiles.ini for
+profiles with "sync" in the name (case sensitive) and attempt to open one that
+is not currently open on the current screen. If a profile is already open on
+the current screen, a new window from that profile will open instead. Due to
+this last quirk, it is recommended to have at least one more profile available
+than the user expects to have open at any time.
 
-# If no profiles are available, this script will also attempt to recover crashed
-# profiles by looking at the $PROFILE_DIR/lock symlink and the address it points
-# to. If the firefox process is not running at the designated address, the lock
-# file is removed, and the profile is recovered. If the address is remote, the
-# remote machine will use SSH to accomplish this. The script will run in SSH
-# mode if the first command line argument is "via_ssh". This should NOT be
-# specified by the user.
+If no profiles are available, this script will also attempt to recover crashed
+profiles by looking at the $PROFILE_DIR/lock symlink and the address it points
+to. If the firefox process is not running at the designated address, the lock
+file is removed, and the profile is recovered. If the address is remote, the
+remote machine will use SSH to accomplish this. The script will run in SSH mode
+if the first command line argument is "via_ssh". This should NOT be specified
+by the user.
 
-# Any arguments (discluding SSH mode) will be passed to the spawned firefox
-# instance through the typical firefox start script.
+Any arguments (discluding SSH mode) will be passed to the spawned firefox
+instance through the typical firefox start script.
 
+"""
 from os import execl, readlink
 import ConfigParser, os.path, pickle, re, socket, subprocess, sys
 
@@ -43,9 +45,14 @@ SSH_FF_STOPPED = 'firefox via_ssh: stopped'
 # TODO: Getting the IP this way may be fragile as per the official python docs.
 LOCAL_IP = socket.gethostbyname(socket.gethostname())
 
-# Finds profiles that are synced (contain 'sync' in their name) and returns them
-# as an array of {'name', 'abs_path'} dicts.
 def find_synced_profiles(filepath):
+    """Finds synced profiles and returns them as an array of dicts.
+
+    Profiles are considered synced if they have the string "sync" in their
+    name.
+
+    The returned dicts are of the format {'name', 'abs_path'}.
+    """
     config = ConfigParser.RawConfigParser()
     config.read(filepath)
 
@@ -68,9 +75,13 @@ def find_synced_profiles(filepath):
                 synced_profiles.append(prof)
     return synced_profiles
 
-# Finds profiles which are not currently being used from the given array of
-# {'name', 'abs_path'} dicts. Returns these inactive profile dicts in an array.
 def find_inactive_profiles(synced_profiles):
+    """Finds profiles which are not being used and returns them in an array.
+
+    synced_profiles and the returned value are arrays of {'name', 'abs_path'}
+    dicts.
+
+    """
     inactive_profiles = [] # [ {'name', 'abs_path'} ]
     active_profiles = [] # [ {'name', 'abs_path', 'ip', 'pid'} ]
     for prof in synced_profiles:
@@ -90,12 +101,17 @@ def find_inactive_profiles(synced_profiles):
                 break # Only recover one for time constraints.
     return inactive_profiles
 
-# Returns a tuple with the active profile's machine ip and Firefox's pid
-# (prof_ip, prof_pid). Returns (None, None) if the lock DNE or the lock's
-# symlink format is not recognized. Additionally prints an error message and
-# exits in the latter case as this should not happen under normal usage. Input
-# is a profile: {'abs_path'}.
 def get_lock_proc_info(prof):
+    """Returns a tuple with the active profile's process info.
+
+    prof is a profile: {'abs_path'}.
+
+    The returned tuple contains the machine's ip and Firefox's pid as
+    (prof_ip, prof_pid). Returns (None, None) if the lock DNE or the lock's
+    symlink format is not recognized. Additionally prints an error message and
+    exits in the latter case as this should not happen under normal usage.
+
+    """
     try:
         info_str = os.readlink(prof['abs_path'] + '/lock')
     except OSError:
@@ -111,21 +127,33 @@ def get_lock_proc_info(prof):
                     'manually review these items. Exiting...')
         return (m.group(1), m.group(2)) # ip, pid
 
-# Attempts to recover a profile by checking if a Firefox process exists at the
-# specified machine and pid, and if not, deletes the lock file and returns True.
-# Returns False otherwise. Input is an active profile: {'name', 'abs_path',
-# 'ip', 'pid'}.
 def attempt_to_recover_profile(prof):
+    """Attempts to recover a Firefox profile in process is inactive.
+
+    prof is a supposedly active profile: {'name', 'abs_path', 'ip', 'pid'}.
+
+    Profile recovery is attempted by checking if a Firefox process exists at
+    the specified machine and pid, and if not, deletes the lock file and
+    returns True.  Returns False otherwise.
+
+    """
     if firefox_is_running(prof): return False
     remove_lock(prof)
     return True
 
-# Returns True if the firefox process is running from the given profile. Returns
-# False otherwise. If the process is located on another machine, it will SSH to
-# return the appropriate result; assumes True if there is an error. Input is a
-# profile of {'name', 'abs_path', 'ip', 'pid'} and a boolean, via_ssh, True, if
-# this function is called in SSH mode.
 def firefox_is_running(prof, via_ssh=False):
+    """Returns True if the Firefox process in the given profile is active.
+
+    Returns False otherwise. prof is a profile: {'name', 'abs_path', 'ip',
+    'pid'} and via_ssh is a boolean True if this function is called from SSH
+    mode, False otherwise.
+
+    If the process is located on another machine, this function will SSH into
+    it to return the appropriate result. If there is an error, the function
+    assumes the profile is running and returns True (as this will have no side
+    effect).
+
+    """
     if prof['ip'] == LOCAL_IP: # Firefox is running on localhost.
         try:
             with open('/proc/' + prof['pid'] + '/cmdline', 'r') as f:
@@ -155,8 +183,8 @@ def firefox_is_running(prof, via_ssh=False):
         if stdout is not None and SSH_FF_STOPPED in stdout: return False
         return True
 
-# Removes the lock from the given profile. Input is a profile: {'abs_path'}.
 def remove_lock(prof):
+    """Removes the lock from the profile, prof: {'abs_path'}."""
     prof_lock_path = prof['abs_path'] + '/lock'
     try:
         os.unlink(prof_lock_path)
