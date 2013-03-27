@@ -73,7 +73,7 @@ def local_main():
     """Running locally: Find and launch an inactive profile."""
     synced_profiles = find_synced_profiles(PROFILE_INI)
     inactive_profiles = find_inactive_profiles(synced_profiles)
-    if len(inactive_profiles) is 0:
+    if len(inactive_profiles) == 0:
         sys.exit('All profiles are currently active or unrecoverable. Please '
                 'close a profile, manually recover a crashed profile, or '
                 'create a new profile with "sync" in the name to open a new '
@@ -134,7 +134,7 @@ def find_inactive_profiles(synced_profiles):
             prof['ip'], prof['pid'] = prof_ip, prof_pid
             active_profiles.append(prof)
 
-    if len(inactive_profiles) is 0:
+    if len(inactive_profiles) == 0:
         print 'Attempting to recover crashed profiles...'
         for prof in active_profiles:
             unlocked = attempt_to_recover_profile(prof)
