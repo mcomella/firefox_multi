@@ -45,6 +45,48 @@ SSH_FF_STOPPED = 'firefox via_ssh: stopped'
 # TODO: Getting the IP this way may be fragile as per the official python docs.
 LOCAL_IP = socket.gethostbyname(socket.gethostname())
 
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'via_ssh': ssh_main()
+    else: local_main()
+
+def ssh_main():
+    """Running remotely: Prints state info to stdout about the given profile.
+
+    The profile information is expected via stdin as a serialized string of the
+    form {'name', 'abs_path', 'ip', 'pid'}.
+
+    The printed state info is specifically whether the given profile appears to
+    be running or not.
+
+    """
+    try:
+        prof = pickle.loads(sys.stdin.read())
+    except (pickle.UnpicklingError, IndexError) as e:
+        print 'Error: ' + str(e)
+        # Assume running so the lock file is not deleted.
+        print SSH_FF_RUNNING
+    else:
+        if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
+        else: print SSH_FF_STOPPED
+
+def local_main():
+    """Running locally: Find and launch an inactive profile."""
+    synced_profiles = find_synced_profiles(PROFILE_INI)
+    inactive_profiles = find_inactive_profiles(synced_profiles)
+    if len(inactive_profiles) is 0:
+        sys.exit('All profiles are currently active or unrecoverable. Please '
+                'close a profile, manually recover a crashed profile, or '
+                'create a new profile with "sync" in the name to open a new '
+                'session.')
+
+    # Spawns firefox in a new shell process since libxpcom.so will be looked
+    # for in the incorrect directory (/usr/bin/libxpcom.so) with an exec call.
+    first_inactive_profile = inactive_profiles[0]['name']
+    firefox_cmd = FIREFOX_PATH + ' -P ' + first_inactive_profile
+    for arg in sys.argv[1:]: firefox_cmd = firefox_cmd + ' \'' + arg + '\''
+    print 'bash -c "' + firefox_cmd + '"'
+    execl(SHELL_PATH, 'bash', '-c', firefox_cmd)
+
 def find_synced_profiles(filepath):
     """Finds synced profiles and returns them as an array of dicts.
 
@@ -194,36 +236,5 @@ def remove_lock(prof):
     else:
         print 'Unlinked ' + prof_lock_path + '.'
 
-# SSH mode: Checks if firefox is running on the current machine based upon the
-# given profile information and returns that info. Expects args of the form:
-#     cmd_path via_ssh
-# where cmd_path = the executable path of this script
-#       via_ssh = the string literal, 'via_ssh'
-# and a serialized profile string on stdin of {`name`, `abs_path`, `ip`, `pid`}.
-if len(sys.argv) > 1 and sys.argv[1] == 'via_ssh':
-    try:
-        prof = pickle.loads(sys.stdin.read())
-    except (pickle.UnpicklingError, IndexError) as e:
-        print 'Error: ' + str(e)
-        # Assume running so the lock file is not deleted.
-        print SSH_FF_RUNNING
-    else:
-        if firefox_is_running(prof, via_ssh=True): print SSH_FF_RUNNING
-        else: print SSH_FF_STOPPED
-    sys.exit()
-
-# User-started mode: Finds an inactive profile and launches it.
-synced_profiles = find_synced_profiles(PROFILE_INI)
-inactive_profiles = find_inactive_profiles(synced_profiles)
-if len(inactive_profiles) is 0:
-    sys.exit('All profiles are currently active or unrecoverable. Please close '
-            'a profile, manually recover a crashed profile, or create a new '
-            'profile with "sync" in the name to open a session.')
-
-# Spawns firefox in a new shell process as libxpcom.so is looked for in the
-# wrong directory (/usr/bin/libxpcom.so) with a straight exec call.
-first_inactive_profile = inactive_profiles[0]['name']
-firefox_cmd = FIREFOX_PATH + ' -P ' + first_inactive_profile
-for arg in sys.argv[1:]: firefox_cmd = firefox_cmd + ' \'' + arg + '\''
-print 'bash -c "' + firefox_cmd + '"'
-execl(SHELL_PATH, 'bash', '-c', firefox_cmd)
+if __name__ == '__main__':
+    main()
