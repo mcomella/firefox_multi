@@ -31,8 +31,8 @@ PROGRAM_PATH = os.path.abspath(sys.argv[0])
 SHELL_PATH = '/bin/bash'
 FIREFOX_BASENAME = 'firefox'
 FIREFOX_PATH = '/contrib/bin/' + FIREFOX_BASENAME
-PROFILE_DIR = os.path.expanduser('~') + '/.mozilla/firefox'
-PROFILE_INI = PROFILE_DIR + '/profiles.ini'
+PROFILE_DIR = os.path.expanduser('~') + '/.mozilla/firefox/'
+PROFILE_INI = PROFILE_DIR + 'profiles.ini'
 
 # Options for firefox process checks on remote hosts.
 SSH_CONNECT_TIMEOUT = 2 # In seconds.
@@ -112,7 +112,7 @@ def find_synced_profiles(filepath):
                 path = config.get(section, 'Path')
                 relative = config.getboolean(section, 'IsRelative')
                 if relative:
-                    path = PROFILE_DIR + '/' + path
+                    path = PROFILE_DIR + path
 
                 prof = {
                     'name': name,
