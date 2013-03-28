@@ -136,8 +136,8 @@ def find_inactive_profiles(synced_profiles):
     if len(inactive_profiles) == 0:
         print 'Attempting to recover crashed profiles...'
         for prof in active_profiles:
-            unlocked = attempt_to_recover_profile(prof)
-            if unlocked is True:
+            prof_is_unlocked = attempt_to_recover_profile(prof)
+            if prof_is_unlocked:
                 inactive_profiles.append(prof)
                 break # Only recover one for time constraints.
     return inactive_profiles
