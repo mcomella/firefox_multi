@@ -206,8 +206,8 @@ def firefox_is_running(prof, via_ssh=False):
 
     else: # Firefox is running on a remote host.
         if via_ssh:
-            sys.stderr.write('firefox_is_running(): SSH has accessed the wrong '
-                    'machine (expected: ' + prof['ip'] + '; actual: ' +
+            sys.stderr.write('firefox_is_running(): SSH has accessed the '
+                    'wrong machine (expected: ' + prof['ip'] + '; actual: ' +
                     LOCAL_IP + '). This should not happen.')
             # Firefox may not be running, but we're not on the correct machine
             # so we can't tell the difference. Assume that it's running so the
