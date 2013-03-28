@@ -46,7 +46,6 @@ LOCK_SYMLINK_REGEX = '([0-9.]+):\+([0-9]+$)'
 SSH_FF_RUNNING = 'firefox via_ssh: running'
 SSH_FF_STOPPED = 'firefox via_ssh: stopped'
 
-# TODO: Getting the IP this way may be fragile as per the official python docs.
 LOCAL_IP = socket.gethostbyname(socket.gethostname())
 
 def main():
