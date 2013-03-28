@@ -98,27 +98,22 @@ def find_synced_profiles(filepath):
     name.
 
     The returned dicts are of the format {'name', 'abs_path'}.
+
     """
     config = ConfigParser.RawConfigParser()
     config.read(filepath)
 
-    # Iterate over profiles. If filepath DNE, config.sections will have a len of
-    # zero, and the empty array will be returned.
+    # Iterate over profiles. If filepath DNE, config.sections will have a len
+    # of zero, and the empty array will be returned.
     synced_profiles = []
     for section in config.sections():
         if 'Profile' in section:
             name = config.get(section, 'Name')
             if 'sync' in name:
                 path = config.get(section, 'Path')
-                relative = config.getboolean(section, 'IsRelative')
-                if relative:
-                    path = PROFILE_DIR + path
-
-                prof = {
-                    'name': name,
-                    'abs_path': path
-                }
-                synced_profiles.append(prof)
+                path_is_relative = config.getboolean(section, 'IsRelative')
+                if path_is_relative: path = PROFILE_DIR + path
+                synced_profiles.append({'name': name, 'abs_path': path})
     return synced_profiles
 
 def find_inactive_profiles(synced_profiles):
