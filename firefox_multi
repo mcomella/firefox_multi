@@ -21,7 +21,11 @@ instance through the typical firefox start script.
 
 """
 from os import execl, readlink
-import ConfigParser, os.path, pickle, re, socket, subprocess, sys
+import ConfigParser
+import pickle
+import re
+import socket
+import os.path, subprocess, sys
 
 PROGRAM_PATH = os.path.abspath(sys.argv[0])
 SHELL_PATH = '/bin/bash'
